@@ -45,9 +45,28 @@ void setup() {
   Serial.println("Maplin remote socket controller. Send commands in the regex format rs([1-4][1-4][01])*\\n to turn on/off sockets in channel 1-4 and button 1-4");
 }
 
-void sendData(long payload1, long payload2) {
-  // Turn on the radio.
+void loop() {
+  // Valid serial string: rs131\r
+  // Read and handle serial data if some has arrived
+  if (Serial.available()) {
+    updateFSM(Serial.read());
+  }
+}
+
+
+/* RADIO */
+
+void radioOn() {
   digitalWrite(VCC_PIN, HIGH);
+}
+
+void radioOff() {
+  digitalWrite(VCC_PIN, LOW);
+}
+
+// RADIO MUST BE ON!
+void sendData(long payload1, long payload2) {
+  // Reset radio status
   digitalWrite(DATA_PIN, HIGH);
   digitalWrite(LED_PIN, LOW);
   
@@ -88,25 +107,14 @@ void sendData(long payload1, long payload2) {
   }
 }
 
+// RADIO MUST BE ON!
 void simulateButton(int channel, int button, int on) {
   long payload1 = buttons[(channel - 1) * 4 + (button - 1)];
   long payload2 = on ? 13107L : 21299L;
 
-  // Send the data 6 times
-  for (int ii = 0; ii < 6; ii++) {
-    sendData(payload1, payload2);
-  }
-  
-  // turn off the radio
-  digitalWrite(VCC_PIN, LOW);
-}
-
-void loop() {
-  // Valid serial string: rs131\r
-  // Read and handle serial data if some has arrived
-  if (Serial.available()) {
-    updateFSM(Serial.read());
-  }
+  // Send the data twice - once doesn't seem to be enough
+  sendData(payload1, payload2);
+  sendData(payload1, payload2);
 }
 
 
@@ -234,9 +242,15 @@ void clearCommandsToExec() {
 
 void executeCommands() {
   Serial.println("Executing button command queue");
-  for (int i=0; i<16; i++) {
-    if (commandsToExec[i][0] != -1) {
+
+  radioOn();
+
+  // Repeat the whole sequence 3 times to be safe
+  for (int j=0; j<3; j++) {
+    for (int i=0; i<nextCommandIndex; i++) {
       simulateButton(commandsToExec[i][0], commandsToExec[i][1], commandsToExec[i][2]);
     }
   }
+
+  radioOff();
 }
