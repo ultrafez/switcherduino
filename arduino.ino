@@ -35,13 +35,15 @@ void setup() {
   pinMode(DATA_PIN, OUTPUT);
   pinMode(VCC_PIN, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
+
+  // Radio pin setup
+  digitalWrite(GND_PIN, LOW);
   
-  //Serial.begin(115200);
+  Serial.begin(115200);
 }
 
 void sendData(long payload1, long payload2) {
   // Turn on the radio.
-  digitalWrite(GND_PIN, LOW);
   digitalWrite(VCC_PIN, HIGH);
   digitalWrite(DATA_PIN, HIGH);
   digitalWrite(LED_PIN, LOW);
@@ -83,7 +85,7 @@ void sendData(long payload1, long payload2) {
   }
 }
 
-void simulate_button(int channel, int button, int on) {
+void simulateButton(int channel, int button, int on) {
   long payload1 = buttons[(channel - 1) * 4 + (button - 1)];
   long payload2 = on ? 13107L : 21299L;
 
@@ -97,8 +99,97 @@ void simulate_button(int channel, int button, int on) {
 }
 
 void loop() {
-  simulate_button(3, 1, 1);
-  delay(2000);
-  simulate_button(3, 1, 0);
-  delay(2000);
+  // Valid serial string: rs131\r
+  // Read and handle serial data if some has arrived
+  if (Serial.available()) {
+    updateFSM(Serial.read());
+  }
+}
+
+
+/* FSM */
+
+// States
+const int STATE_WAIT_FOR_R = 1;
+const int STATE_WAIT_FOR_S = 2;
+const int STATE_WAIT_FOR_CHANNEL = 3;
+const int STATE_WAIT_FOR_BUTTON = 4;
+const int STATE_WAIT_FOR_ONOFF = 5;
+const int STATE_WAIT_FOR_EXECUTE = 6;
+
+// Machine stored data
+int currentState = STATE_WAIT_FOR_R;
+int chosenChannel = 0;
+int chosenButton = 0;
+int chosenOnOff = -1;
+
+/**
+ * Simulate a FSM that parses strings of the format "rs131\r", meaning to set channel 1, button 3, to state 1 (on).
+ * \n may be used instead of \r
+ */
+void updateFSM(char inputChar) {
+  int charAsInt;
+  switch (currentState) {
+    case STATE_WAIT_FOR_R:
+      if (inputChar == 'r') {
+        Serial.println("Change state to wait for s");
+        currentState = STATE_WAIT_FOR_S;
+      }
+      break;
+
+    case STATE_WAIT_FOR_S:
+      if (inputChar == 's') {
+        Serial.println("Change state to wait for channel");
+        currentState = STATE_WAIT_FOR_CHANNEL;
+      } else {
+        Serial.println("Change state to wait for r");
+        currentState = STATE_WAIT_FOR_R;
+      }
+      break;
+
+    case STATE_WAIT_FOR_CHANNEL:
+      charAsInt = inputChar - '0';
+      if (charAsInt >= 1 && charAsInt <= 4) {
+        chosenChannel = charAsInt;
+        Serial.println("Change state to wait for button");
+        currentState = STATE_WAIT_FOR_BUTTON;
+      } else {
+        Serial.println("Change state to wait for r");
+        currentState = STATE_WAIT_FOR_R;
+      }
+      break;
+
+    case STATE_WAIT_FOR_BUTTON:
+      charAsInt = inputChar - '0';
+      if (charAsInt >= 1 && charAsInt <= 4) {
+        chosenButton = charAsInt;
+        Serial.println("Change state to wait for onoff");
+        currentState = STATE_WAIT_FOR_ONOFF;
+      } else {
+        Serial.println("Change state to wait for r");
+        currentState = STATE_WAIT_FOR_R;
+      }
+      break;
+      
+    case STATE_WAIT_FOR_ONOFF:
+      charAsInt = inputChar - '0';
+      if (charAsInt == 0 || charAsInt == 1) {
+        chosenOnOff = charAsInt;
+        Serial.println("Change state to wait for execute");
+        currentState = STATE_WAIT_FOR_EXECUTE;
+      } else {
+        Serial.println("Change state to wait for r");
+        currentState = STATE_WAIT_FOR_R;
+      }
+      break;
+
+    case STATE_WAIT_FOR_EXECUTE:
+      if (inputChar == 13 || inputChar == 10) { // carriage return or line feed
+        Serial.println("Simulating button");
+        simulateButton(chosenChannel, chosenButton, chosenOnOff);
+      }
+      Serial.println("Change state to wait for r");
+      currentState = STATE_WAIT_FOR_R;
+      break;
+  }
 }
