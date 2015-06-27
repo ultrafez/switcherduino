@@ -1,40 +1,15 @@
-// Based on code at http://www.fanjita.org/serendipity/archives/53-Interfacing-with-radio-controlled-mains-sockets-part-2.html
-
-#define PAYLOAD_SIZE 48
+#include "MaplinCtrl.h"
 
 #define DATA_PIN  2
 #define VCC_PIN   3
 #define GND_PIN   4
 #define LED_PIN   17
 
-#define PULSE_WIDTH_SMALL  500
-
-// Button ID (payload1) values.  There are 4 values for 4 channels, organised as
-// ch1_btn1, ch1_btn2, ch1_btn3, ch1_btn4, ch2_btn1, etc.
-long buttons[] = {
-  859124533L,
-  861090613L,
-  892547893L,
-  1395864373L,
-  859124563L,
-  861090643L,
-  892547923L,
-  1395864403L,
-  859125043L,
-  861091123L,
-  892548403L,
-  1395864883L,
-  859132723L,
-  861098803L,
-  892556083L,
-  1395872563L  
-};
+MaplinCtrl maplinCtrl(DATA_PIN, LED_PIN);
 
 void setup() {
   pinMode(GND_PIN, OUTPUT);
-  pinMode(DATA_PIN, OUTPUT);
   pinMode(VCC_PIN, OUTPUT);
-  pinMode(LED_PIN, OUTPUT);
 
   // Radio pin setup
   digitalWrite(GND_PIN, LOW);
@@ -62,59 +37,6 @@ void radioOn() {
 
 void radioOff() {
   digitalWrite(VCC_PIN, LOW);
-}
-
-// RADIO MUST BE ON!
-void sendData(long payload1, long payload2) {
-  // Reset radio status
-  digitalWrite(DATA_PIN, HIGH);
-  digitalWrite(LED_PIN, LOW);
-  
-  // Send a preamble of 13 ms low pulse
-  digitalWrite(DATA_PIN, LOW);
-  for (int ii = 0; ii < 26; ii++) {
-    delayMicroseconds(PULSE_WIDTH_SMALL);
-  }
-  digitalWrite(LED_PIN, HIGH);
-  
-  // send sync pulse : high for 0.5 ms
-  digitalWrite(DATA_PIN, HIGH);
-  delayMicroseconds(PULSE_WIDTH_SMALL);
-  digitalWrite(DATA_PIN, LOW);
-  
-  // Now send the digits.  
-  // We send a 1 as a state change for 1.5ms, and a 0 as a state change for 0.5ms
-  long mask = 1;
-  char state = HIGH;
-  long payload = payload1;
-  for (int jj = 0; jj < PAYLOAD_SIZE; jj++) {
-    if (jj == 32) {
-      payload = payload2;
-      mask = 1;
-    }
-    
-    char bit = (payload & mask) ? 1 : 0;
-    mask <<= 1;
-      
-    state = !state;
-    digitalWrite(DATA_PIN, state);
-  
-    delayMicroseconds(PULSE_WIDTH_SMALL);  
-    if (bit) {
-      delayMicroseconds(PULSE_WIDTH_SMALL);  
-      delayMicroseconds(PULSE_WIDTH_SMALL);  
-    }
-  }
-}
-
-// RADIO MUST BE ON!
-void simulateButton(int channel, int button, int on) {
-  long payload1 = buttons[(channel - 1) * 4 + (button - 1)];
-  long payload2 = on ? 13107L : 21299L;
-
-  // Send the data twice - once doesn't seem to be enough
-  sendData(payload1, payload2);
-  sendData(payload1, payload2);
 }
 
 
@@ -248,7 +170,7 @@ void executeCommands() {
   // Repeat the whole sequence 3 times to be safe
   for (int j=0; j<3; j++) {
     for (int i=0; i<nextCommandIndex; i++) {
-      simulateButton(commandsToExec[i][0], commandsToExec[i][1], commandsToExec[i][2]);
+      maplinCtrl.simulateButton(commandsToExec[i][0], commandsToExec[i][1], commandsToExec[i][2]);
     }
   }
 
