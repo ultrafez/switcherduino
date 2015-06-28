@@ -1,5 +1,5 @@
 #include "MaplinCtrl.h"
-#include "NexaCtrl.h"
+#include "NexaTransmitter.h"
 
 #define DATA_PIN  2
 #define VCC_PIN   3
@@ -9,7 +9,7 @@
 #define NEXA_CONTROLLER_ID 1153614
 
 MaplinCtrl maplinCtrl(DATA_PIN, LED_PIN);
-NexaCtrl nexaCtrl(DATA_PIN, 0, LED_PIN); // rx pin isn't even used in that library. plus, we have no receiver hardware anyway
+NexaTransmitter nexaTransmitter(DATA_PIN, NEXA_CONTROLLER_ID);
 
 void setup() {
   pinMode(GND_PIN, OUTPUT);
@@ -131,6 +131,7 @@ void updateFSM(char inputChar) {
     case STATE_WAIT_FOR_ONOFF:
       charAsInt = inputChar - '0';
       if (charAsInt == 0 || charAsInt == 1) {
+      //if (charAsInt >= 0 && charAsInt <= 9) { // this just allows us to test the dimmer by setting absolute dim values. This is definite hack and was just used for testing
         addCommand(chosenChannel, chosenButton, charAsInt);
         Serial.println("-> STATE_READY_FOR_CHANNEL_OR_EXECUTE");
         currentState = STATE_READY_FOR_CHANNEL_OR_EXECUTE;
@@ -175,15 +176,11 @@ void executeCommands() {
   int deviceId = 0;
   for (int j=0; j<3; j++) {
     for (int i=0; i<nextCommandIndex; i++) {
-      //maplinCtrl.simulateButton(commandsToExec[i][0], commandsToExec[i][1], commandsToExec[i][2]);
+      maplinCtrl.simulateButton(commandsToExec[i][0], commandsToExec[i][1], commandsToExec[i][2]);
       
-      deviceId = (commandsToExec[i][0]-1)*4 + (commandsToExec[i][1]-1);
-      
-      if (commandsToExec[i][2] == 1) {
-        nexaCtrl.DeviceOn(NEXA_CONTROLLER_ID, deviceId);
-      } else {
-        nexaCtrl.DeviceOff(NEXA_CONTROLLER_ID, deviceId);
-      }
+      /*deviceId = (commandsToExec[i][0]-1)*4 + (commandsToExec[i][1]-1);
+      nexaTransmitter.setSwitch(false, deviceId, commandsToExec[i][2]); // Using the commandsToExec[i][2] is a hack just to test dimming. The "power" flag is hardcoded off here
+      */
     }
   }
 
