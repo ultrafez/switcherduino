@@ -1,11 +1,15 @@
 #include "MaplinCtrl.h"
+#include "NexaCtrl.h"
 
 #define DATA_PIN  2
 #define VCC_PIN   3
 #define GND_PIN   4
 #define LED_PIN   17
 
+#define NEXA_CONTROLLER_ID 1153614
+
 MaplinCtrl maplinCtrl(DATA_PIN, LED_PIN);
+NexaCtrl nexaCtrl(DATA_PIN, 0, LED_PIN); // rx pin isn't even used in that library. plus, we have no receiver hardware anyway
 
 void setup() {
   pinMode(GND_PIN, OUTPUT);
@@ -168,9 +172,18 @@ void executeCommands() {
   radioOn();
 
   // Repeat the whole sequence 3 times to be safe
+  int deviceId = 0;
   for (int j=0; j<3; j++) {
     for (int i=0; i<nextCommandIndex; i++) {
-      maplinCtrl.simulateButton(commandsToExec[i][0], commandsToExec[i][1], commandsToExec[i][2]);
+      //maplinCtrl.simulateButton(commandsToExec[i][0], commandsToExec[i][1], commandsToExec[i][2]);
+      
+      deviceId = (commandsToExec[i][0]-1)*4 + (commandsToExec[i][1]-1);
+      
+      if (commandsToExec[i][2] == 1) {
+        nexaCtrl.DeviceOn(NEXA_CONTROLLER_ID, deviceId);
+      } else {
+        nexaCtrl.DeviceOff(NEXA_CONTROLLER_ID, deviceId);
+      }
     }
   }
 
