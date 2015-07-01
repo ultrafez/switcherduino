@@ -1,6 +1,36 @@
 #include "MaplinCtrl.h"
 #include "NexaTransmitter.h"
 
+/*
+Nexa and Maplin socket/device controller.
+Accepts commands over serial and executes them using the radio transmitter.
+
+The device to control, and what we want to do with it (toggle power, or set dim level) is set in one command.
+Multiple commands can be strung together, and when a "\n" is received they'll all be executed rapidly in sequence.
+Each of these commands should be appended to each other with no gaps in no particular order.
+
+t67108863;
+Set the Nexa self-learning transmitter number. This can be used multiple times per command string, but only the last
+set number will be used when all of the commands are executed. This means that only devices that are paired with the
+same transmitter code can be used in one execution. Maximum transmitter code value is 67108863 (26 bits)
+
+m341
+Turn Maplin socket on channel 3, button 4 on. Format: m[channel][button][on/off]
+
+n051
+Turn Nexa device 05 on. Pad with zeros if required. Format: n[device code 2 chars][on/off]
+
+n13d10
+Set Nexa device 13 to dim level 10. Pad with zeros if required. Format: n[device code 2 chars]d[dim level 2 chars]
+
+\n
+Execute the sequence of commands
+
+
+Example:
+t151632;n020n12d06m411\n
+*/
+
 #define DATA_PIN  2
 #define VCC_PIN   3
 #define GND_PIN   4
@@ -10,6 +40,15 @@
 
 MaplinCtrl maplinCtrl(DATA_PIN, LED_PIN);
 NexaTransmitter nexaTransmitter(DATA_PIN, NEXA_CONTROLLER_ID);
+
+typedef struct {
+  bool isNexa : 1; // whether this is a nexa command or maplin. this is not futureproof at present
+  unsigned int device : 4; // the device to turn on/off. for nexa, this the 16 bit device code, for maplin, it's composed from the channel+button
+  bool doDim : 1; // are we setting the dim level of the device? or just turning on/off? not applicable for maplin
+  bool onOff : 1; // turn the device on or off? the value is ignored if we're dimming
+  unsigned int dim : 4; // the level between 0 and 15 to dim to. not applicable to maplin. only used if doDim is 1
+} nexaCommand;
+
 
 void setup() {
   pinMode(GND_PIN, OUTPUT);
@@ -21,11 +60,10 @@ void setup() {
   setupFSM();
   
   Serial.begin(115200);
-  Serial.println("Maplin remote socket controller. Send commands in the regex format rs([1-4][1-4][01])*\\n to turn on/off sockets in channel 1-4 and button 1-4");
+  Serial.println("Remote socket controller. Supports Nexa (self-learning protocol) and Maplin sockets.");
 }
 
 void loop() {
-  // Valid serial string: rs131\r
   // Read and handle serial data if some has arrived
   if (Serial.available()) {
     updateFSM(Serial.read());
@@ -47,142 +85,170 @@ void radioOff() {
 /* FSM */
 
 // States
-const int STATE_WAIT_FOR_R = 1;
-const int STATE_WAIT_FOR_S = 2;
-const int STATE_READY_FOR_CHANNEL_OR_EXECUTE = 3;
-const int STATE_WAIT_FOR_BUTTON = 4;
-const int STATE_WAIT_FOR_ONOFF = 5;
+const int STATE_WAIT_FOR_CMD = 1;
+const int STATE_SET_TRANSMITTER_CODE = 2;
+const int STATE_SET_NEXA_DEVICE = 3;
+const int STATE_SET_NEXA_DIM = 4;
+const int STATE_WAIT4_MAPLIN_CHANNEL = 5;
+const int STATE_WAIT4_MAPLIN_BUTTON = 6;
+const int STATE_WAIT4_MAPLIN_ONOFF = 7;
 
-// Machine stored data
-int currentState = STATE_WAIT_FOR_R;
-int chosenChannel = 0;
-int chosenButton = 0;
 
-// store a list of commands to execute when the execute command is received.
-// each command is represented by 3 consecutive array values - channel, button, state.
-// set to -1 when they don't contain a command to execute
-char commandsToExec[16][3];
-int nextCommandIndex = 0; // what index should we insert the next command into?
+// State machine state
+nexaCommand cmdQueue[16]; // you can execute a maximum of 16 commands in one go. These commands will be executed when \n is received
+int currentCmdIndex = 0; // the command that we're currently editing
+unsigned long transmitterCode = 0; // the Nexa transmitter code to use. 26 bits long
+int currentState = STATE_WAIT_FOR_CMD;
+int charsSeen = 0; // general purpose counter for counting how many chars we've seen in any particular step.
 
 void setupFSM() {
   clearCommandsToExec();
 }
 
 /**
- * Simulate a FSM that parses strings of the format "rs131*\r", meaning to set channel 1, button 3, to state 1 (on).
- * Handles multiple commands (up to a total of 16), e.g. rs131140\r to turn on channel 1 btn 3, and turn off channel 1 btn 4
- * \n may be used instead of \r
+ * A finite state machine to implement the protocol at the top of the file.
  */
 void updateFSM(char inputChar) {
   int charAsInt;
+  int startState = currentState;
+  //Serial.print("Processing char ");
+  //Serial.println(inputChar);
+
   switch (currentState) {
-    case STATE_WAIT_FOR_R:
-      if (inputChar == 'r') {
-        Serial.println("-> STATE_WAIT_FOR_S");
-        currentState = STATE_WAIT_FOR_S;
+    case STATE_WAIT_FOR_CMD:
+      if (inputChar == 't') {
+        currentState = STATE_SET_TRANSMITTER_CODE;
+        transmitterCode = 0;
+      } else if (inputChar == 'n') {
+        currentState = STATE_SET_NEXA_DEVICE;
+        charsSeen = 0;
+        cmdQueue[currentCmdIndex].isNexa = true;
+        cmdQueue[currentCmdIndex].device = 0;
+        cmdQueue[currentCmdIndex].doDim = false;
+        cmdQueue[currentCmdIndex].onOff = false;
+      } else if (inputChar == 'm') {
+        currentState = STATE_WAIT4_MAPLIN_CHANNEL;
+        cmdQueue[currentCmdIndex].isNexa = false;
+        cmdQueue[currentCmdIndex].device = 0;
+      } else if (inputChar == 13 || inputChar == 10) { // carriage return or line feed
+        executeCmds();
       }
       break;
 
-    case STATE_WAIT_FOR_S:
-      if (inputChar == 's') {
-        Serial.println("-> STATE_READY_FOR_CHANNEL_OR_EXECUTE");
-        currentState = STATE_READY_FOR_CHANNEL_OR_EXECUTE;
+    case STATE_SET_TRANSMITTER_CODE:
+      if (inputChar == ';') {
+        currentState = STATE_WAIT_FOR_CMD;
       } else {
-        clearCommandsToExec();
-        Serial.println("-> STATE_WAIT_FOR_R");
-        currentState = STATE_WAIT_FOR_R;
+        charAsInt = inputChar - '0';
+        if (isNum(charAsInt)) {
+          transmitterCode = transmitterCode*10 + charAsInt;
+        }
       }
       break;
 
-    case STATE_READY_FOR_CHANNEL_OR_EXECUTE:
-      if (inputChar == 13 || inputChar == 10) { // carriage return or line feed
-        executeCommands();
-        clearCommandsToExec();
-        Serial.println("-> STATE_WAIT_FOR_R");
-        currentState = STATE_WAIT_FOR_R;
-        break;
-      }
-
+    case STATE_SET_NEXA_DEVICE:
       charAsInt = inputChar - '0';
-      if (charAsInt >= 1 && charAsInt <= 4) {
-        chosenChannel = charAsInt;
-        Serial.println("-> STATE_WAIT_FOR_BUTTON");
-        currentState = STATE_WAIT_FOR_BUTTON;
-      } else {
-        clearCommandsToExec();
-        Serial.println("-> STATE_WAIT_FOR_R");
-        currentState = STATE_WAIT_FOR_R;
+      if (isNum(charAsInt)) {
+        if (charsSeen < 2) {
+          cmdQueue[currentCmdIndex].device = cmdQueue[currentCmdIndex].device * 10 + charAsInt;
+          charsSeen++;
+        } else {
+          cmdQueue[currentCmdIndex].onOff = (charAsInt == 1);
+          finishCmd();
+        }
+      } else if (inputChar == 'd') {
+        currentState = STATE_SET_NEXA_DIM;
+        cmdQueue[currentCmdIndex].doDim = true;
+        cmdQueue[currentCmdIndex].dim = 0;
+        charsSeen = 0;
       }
       break;
 
-    case STATE_WAIT_FOR_BUTTON:
+    case STATE_SET_NEXA_DIM:
       charAsInt = inputChar - '0';
-      if (charAsInt >= 1 && charAsInt <= 4) {
-        chosenButton = charAsInt;
-        Serial.println("-> STATE_WAIT_FOR_ONOFF");
-        currentState = STATE_WAIT_FOR_ONOFF;
-      } else {
-        clearCommandsToExec();
-        Serial.println("-> STATE_WAIT_FOR_R");
-        currentState = STATE_WAIT_FOR_R;
+      if (isNum(charAsInt)) {
+        cmdQueue[currentCmdIndex].dim = cmdQueue[currentCmdIndex].dim*10 + charAsInt;
+        charsSeen++;
+        if (charsSeen == 2) {
+          finishCmd();
+        }
       }
       break;
-      
-    case STATE_WAIT_FOR_ONOFF:
+
+    case STATE_WAIT4_MAPLIN_CHANNEL:
       charAsInt = inputChar - '0';
-      if (charAsInt == 0 || charAsInt == 1) {
-      //if (charAsInt >= 0 && charAsInt <= 9) { // this just allows us to test the dimmer by setting absolute dim values. This is definite hack and was just used for testing
-        addCommand(chosenChannel, chosenButton, charAsInt);
-        Serial.println("-> STATE_READY_FOR_CHANNEL_OR_EXECUTE");
-        currentState = STATE_READY_FOR_CHANNEL_OR_EXECUTE;
-      } else {
-        clearCommandsToExec();
-        Serial.println("-> STATE_WAIT_FOR_R");
-        currentState = STATE_WAIT_FOR_R;
+      if (isNum(charAsInt)) {
+        cmdQueue[currentCmdIndex].device = charAsInt;
+        currentState = STATE_WAIT4_MAPLIN_BUTTON;
       }
       break;
+
+    case STATE_WAIT4_MAPLIN_BUTTON:
+      charAsInt = inputChar - '0';
+      if (isNum(charAsInt)) {
+        cmdQueue[currentCmdIndex].device = (cmdQueue[currentCmdIndex].device-1) * 4 + charAsInt-1;
+        currentState = STATE_WAIT4_MAPLIN_ONOFF;
+      }
+      break;
+
+    case STATE_WAIT4_MAPLIN_ONOFF:
+      cmdQueue[currentCmdIndex].onOff = (inputChar == '1');
+      finishCmd();
+      break;
+  }
+
+  /*if (currentState != startState) {
+    Serial.print("state ");
+    Serial.print(startState);
+    Serial.print(" -> ");
+    Serial.println(currentState);
+  }*/
+}
+
+// we've finished writing our command
+void finishCmd() {
+  currentState = STATE_WAIT_FOR_CMD;
+  if (currentCmdIndex < 15) { // the last index of the command array
+    currentCmdIndex++;
   }
 }
 
-void addCommand(int channel, int button, int onOff) {
-  Serial.print("Adding command to queue: channel ");
-  Serial.print((int)channel);
-  Serial.print(", button ");
-  Serial.print((int)button);
-  Serial.print(", power ");
-  Serial.println((int)onOff);
-  commandsToExec[nextCommandIndex][0] = channel;
-  commandsToExec[nextCommandIndex][1] = button;
-  commandsToExec[nextCommandIndex][2] = onOff;
-  if (nextCommandIndex < 15) {
-    nextCommandIndex += 1;
-  }
+bool isNum(char ch) {
+  return ch >= 0 && ch <= 9;
 }
 
 void clearCommandsToExec() {
   Serial.println("Clearing button command queue");
-  for (int i=0; i<16; i++) {
-    commandsToExec[i][0] = -1; // only set the channel to -1, because only the channel is checked for emptiness
-  }
-  nextCommandIndex = 0;
+  currentCmdIndex = 0;
 }
 
-void executeCommands() {
+void executeCmds() {
   Serial.println("Executing button command queue");
 
-  radioOn();
-
   // Repeat the whole sequence 3 times to be safe
-  int deviceId = 0;
   for (int j=0; j<3; j++) {
-    for (int i=0; i<nextCommandIndex; i++) {
-      maplinCtrl.simulateButton(commandsToExec[i][0], commandsToExec[i][1], commandsToExec[i][2]);
+    for (int i=0; i<currentCmdIndex; i++) {
+      //Serial.print("Execute command ");Serial.println(i);
       
-      /*deviceId = (commandsToExec[i][0]-1)*4 + (commandsToExec[i][1]-1);
-      nexaTransmitter.setSwitch(false, deviceId, commandsToExec[i][2]); // Using the commandsToExec[i][2] is a hack just to test dimming. The "power" flag is hardcoded off here
-      */
+      radioOn();
+      
+      if (cmdQueue[i].isNexa) {
+        if (cmdQueue[i].doDim) {
+          Serial.print("Nexa dim "); Serial.print(cmdQueue[i].device); Serial.print(" "); Serial.println(cmdQueue[i].dim);
+          nexaTransmitter.setSwitch(false, cmdQueue[i].device, cmdQueue[i].dim);
+        } else {
+          Serial.print("Nexa switch "); Serial.print(cmdQueue[i].device); Serial.print(" "); Serial.println(cmdQueue[i].onOff);
+          nexaTransmitter.setSwitch(cmdQueue[i].onOff, cmdQueue[i].device, 0);
+        }
+      } else {
+        Serial.print("Maplin exec "); Serial.print(cmdQueue[i].device); Serial.print(" "); Serial.println(cmdQueue[i].onOff);
+        maplinCtrl.simulateButton(cmdQueue[i].device, cmdQueue[i].onOff);
+      }
+      
+      radioOff();
+      delay(100);
     }
   }
 
-  radioOff();
+  clearCommandsToExec();
 }

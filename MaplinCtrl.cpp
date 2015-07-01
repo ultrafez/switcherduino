@@ -44,10 +44,16 @@ void MaplinCtrl::deviceOff(unsigned int channel_id, unsigned int button_id) {
 
 // RADIO MUST BE ON!
 void MaplinCtrl::simulateButton(int channel, int button, int on) {
-  long payload1 = buttons[(channel - 1) * 4 + (button - 1)];
+    simulateButton((channel - 1) * 4 + (button - 1), on);
+}
+
+// RADIO MUST BE ON!
+void MaplinCtrl::simulateButton(int device, int on) {
+  long payload1 = buttons[device];
   long payload2 = on ? 13107L : 21299L;
 
   // Send the data twice - once doesn't seem to be enough
+  sendData(payload1, payload2);
   sendData(payload1, payload2);
   sendData(payload1, payload2);
 }

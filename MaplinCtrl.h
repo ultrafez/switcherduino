@@ -10,6 +10,7 @@ class MaplinCtrl {
         void deviceOn(unsigned int channel_id, unsigned int button_id);
         void deviceOff(unsigned int channel_id, unsigned int button_id);
         void simulateButton(int channel, int button, int on);
+        void simulateButton(int device, int on);
 
     private:
         int tx_pin_;
