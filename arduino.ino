@@ -114,6 +114,9 @@ void updateFSM(char inputChar) {
   int startState = currentState;
   //Serial.print("Processing char ");
   //Serial.println(inputChar);
+  if (strchr("tnm", inputChar) != NULL && charsSeen > 0) {
+    finishCmd();
+  }
 
   switch (currentState) {
     case STATE_WAIT_FOR_CMD:
@@ -213,6 +216,7 @@ void finishCmd() {
     currentCmdIndex++;
     cmdQueue[currentCmdIndex].commandType = UNKNOWN;
   }
+  charsSeen = 0;
 }
 
 bool isNum(char ch) {
