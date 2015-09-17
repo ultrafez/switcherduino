@@ -40,9 +40,10 @@ t151632;n020n12d06m411\n
 
 MaplinCtrl maplinCtrl(DATA_PIN, LED_PIN);
 NexaTransmitter nexaTransmitter(DATA_PIN, NEXA_CONTROLLER_ID);
+typedef enum commandTypeEnum {UNKNOWN = -1, UNUSED = 0, NEXA = 1, MAPLIN = 2};
 
 typedef struct {
-  bool isNexa : 1; // whether this is a nexa command or maplin. this is not futureproof at present
+  enum commandTypeEnum commandType; // whether this is a nexa command or maplin. futureproof, just add more enum types!
   unsigned int device : 4; // the device to turn on/off. for nexa, this the 16 bit device code, for maplin, it's composed from the channel+button
   bool doDim : 1; // are we setting the dim level of the device? or just turning on/off? not applicable for maplin
   bool onOff : 1; // turn the device on or off? the value is ignored if we're dimming
@@ -122,13 +123,13 @@ void updateFSM(char inputChar) {
       } else if (inputChar == 'n') {
         currentState = STATE_SET_NEXA_DEVICE;
         charsSeen = 0;
-        cmdQueue[currentCmdIndex].isNexa = true;
+        cmdQueue[currentCmdIndex].commandType = NEXA;
         cmdQueue[currentCmdIndex].device = 0;
         cmdQueue[currentCmdIndex].doDim = false;
         cmdQueue[currentCmdIndex].onOff = false;
       } else if (inputChar == 'm') {
         currentState = STATE_WAIT4_MAPLIN_CHANNEL;
-        cmdQueue[currentCmdIndex].isNexa = false;
+        cmdQueue[currentCmdIndex].commandType = MAPLIN;
         cmdQueue[currentCmdIndex].device = 0;
       } else if (inputChar == 13 || inputChar == 10) { // carriage return or line feed
         executeCmds();
@@ -210,6 +211,7 @@ void finishCmd() {
   currentState = STATE_WAIT_FOR_CMD;
   if (currentCmdIndex < 15) { // the last index of the command array
     currentCmdIndex++;
+    cmdQueue[currentCmdIndex].commandType = UNKNOWN;
   }
 }
 
@@ -220,11 +222,11 @@ bool isNum(char ch) {
 void clearCommandsToExec() {
   Serial.println("Clearing button command queue");
   currentCmdIndex = 0;
+  cmdQueue[currentCmdIndex].commandType = UNKNOWN;
 }
 
 void executeCmds() {
   Serial.println("Executing button command queue");
-
   // Repeat the whole sequence 3 times to be safe
   for (int j=0; j<3; j++) {
     for (int i=0; i<currentCmdIndex; i++) {
@@ -232,17 +234,20 @@ void executeCmds() {
       
       radioOn();
       
-      if (cmdQueue[i].isNexa) {
-        if (cmdQueue[i].doDim) {
-          Serial.print("Nexa dim "); Serial.print(cmdQueue[i].device); Serial.print(" "); Serial.println(cmdQueue[i].dim);
-          nexaTransmitter.setSwitch(false, cmdQueue[i].device, cmdQueue[i].dim);
-        } else {
-          Serial.print("Nexa switch "); Serial.print(cmdQueue[i].device); Serial.print(" "); Serial.println(cmdQueue[i].onOff);
-          nexaTransmitter.setSwitch(cmdQueue[i].onOff, cmdQueue[i].device, 0);
-        }
-      } else {
-        Serial.print("Maplin exec "); Serial.print(cmdQueue[i].device); Serial.print(" "); Serial.println(cmdQueue[i].onOff);
-        maplinCtrl.simulateButton(cmdQueue[i].device, cmdQueue[i].onOff);
+      switch (cmdQueue[i].commandType) {
+        case NEXA :
+          if (cmdQueue[i].doDim) {
+            Serial.print("Nexa dim "); Serial.print(cmdQueue[i].device); Serial.print(" "); Serial.println(cmdQueue[i].dim);
+            nexaTransmitter.setSwitch(false, cmdQueue[i].device, cmdQueue[i].dim);
+          } else {
+            Serial.print("Nexa switch "); Serial.print(cmdQueue[i].device); Serial.print(" "); Serial.println(cmdQueue[i].onOff);
+            nexaTransmitter.setSwitch(cmdQueue[i].onOff, cmdQueue[i].device, 0);
+          }
+          break;
+        case MAPLIN :
+          Serial.print("Maplin exec "); Serial.print(cmdQueue[i].device); Serial.print(" "); Serial.println(cmdQueue[i].onOff);
+          maplinCtrl.simulateButton(cmdQueue[i].device, cmdQueue[i].onOff);
+        break;
       }
       
       radioOff();
