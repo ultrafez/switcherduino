@@ -43,3 +43,7 @@ These notes are taken from my original Arduino sketch; these are accurate but ne
 > Example:
 > t151632;n020n12d06m411\n
 > This will use 151634 as the Nexa transmitter ID, and then turn Nexa device 2 off, Nexa device 12 dim to level 6, and turn Maplin socket channel 3 button 1 on.
+
+## Credit
+
+Most of the hard work for this project was done by David Edmundson, Martyn Henderson and Erik Simko for their work on the [Nexa transmitter](https://github.com/erix/NexaTransmitter), and somebody who's name I cannot currently find due to the [original source of the Maplin transmitter code](http://www.fanjita.org/serendipity/archives/53-Interfacing-with-radio-controlled-mains-sockets-part-2.html) being down.
