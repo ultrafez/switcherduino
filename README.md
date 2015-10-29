@@ -6,7 +6,7 @@ The only hardware components required in addition to the Arduino are a 433mhz RF
 
 ## Features
 
-The transmitter currently has protocol support for Nexa self-learning sockets (protocol shared with Home Easy and some others - not the Nexa sockets that use a house and unit code), and some inexpensive [Maplin sockets](http://www.maplin.co.uk/p/remote-controlled-mains-sockets-5-pack-n38hn). The protocol used by the Nexa sockets seems to be more resilient to interference on the crowded 433mhz band, so I'd strongly recommend using them over the Maplin ones. I stopped using my Maplin sockets in favour of Nexa ones for this reason.
+The transmitter currently has protocol support for [Nexa self-learning sockets](http://www.clasohlson.com/uk/Nexa-EYCR-250UK-Dimmable-Remote-Switch-Receiver/18-2653) (protocol shared with Home Easy and some others - not the Nexa sockets that use a house and unit code), and some inexpensive [Maplin sockets](http://www.maplin.co.uk/p/remote-controlled-mains-sockets-5-pack-n38hn). The protocol used by the Nexa sockets seems to be more resilient to interference on the crowded 433mhz band, so I'd strongly recommend using them over the Maplin ones. I stopped using my Maplin sockets in favour of Nexa ones for this reason.
 
 When controlling Maplin sockets, any of the 16 sockets (4 buttons on 4 channels) can be set to on or off. When controlling Nexa sockets, any toggleable sockets can be set to on/off and any dimmable socket can be set to a dim level between 0 (off) and 15 (max).
 
