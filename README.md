@@ -16,33 +16,43 @@ When connected via USB, the Arduino will appear to the USB host as a serial devi
 
 ## Serial protocol
 
-These notes are taken from my original Arduino sketch; these are accurate but need reformatting for this documentation page.
+A series of commands sent one after the other (concatendated) are sent to the Arduino, followed by a `\n` newline character - at this point, the commands will be executed sequentially. Command details:
 
-> The device to control, and what we want to do with it (toggle power, or set dim level) is set in one command.
-> Multiple commands can be strung together, and when a "\n" is received they'll all be executed rapidly in sequence.
-> Each of these commands should be appended to each other with no gaps in no particular order.
->
-> t67108863;
-> Set the Nexa self-learning transmitter number. This can be used multiple times per command string, but only the last
-> set number will be used when all of the commands are executed. This means that only devices that are paired with the
-> same transmitter code can be used in one execution. Maximum transmitter code value is 67108863 (26 bits)
->
-> m341
-> Turn Maplin socket on channel 3, button 4 on. Format: m[channel][button][on/off]
->
-> n051
-> Turn Nexa device 05 on. Pad device number with zeros if required. Format: n[device code 2 chars][on/off]
->
-> n13d10
-> Set Nexa device 13 to dim level 10. Pad with zeros if required. Format: n[device code 2 chars]d[dim level 2 chars]
->
-> \n
-> Execute the sequence of commands
->
->
-> Example:
-> t151632;n020n12d06m411\n
-> This will use 151634 as the Nexa transmitter ID, and then turn Nexa device 2 off, Nexa device 12 dim to level 6, and turn Maplin socket channel 3 button 1 on.
+### Set Nexa self-learning transmitter number
+
+Example: `t67108863`
+
+Set the Nexa self-learning transmitter number. This can be used multiple times per command string, but only the last set number will be used when all of the commands are executed. This means that only devices that are paired with the same transmitter code can be used in one execution. Maximum transmitter code value is 67108863 (26 bits)
+
+### Power Maplin socket on/off
+
+Example: `m341`
+
+Turn Maplin socket on channel 3, button 4 on. Format: m[channel][button][on/off]
+
+### Power Nexa device on/off
+
+Example: `n051`
+
+Turn Nexa device 05 on. Pad device number with zeros if required. Format: n[device code 2 chars][on/off]
+
+### Set Nexa device dim level
+
+Example: `n13d10`
+
+Set Nexa device 13 to dim level 10. Pad with zeros if required. Format: n[device code 2 chars]d[dim level 2 chars]
+
+### Execute commands
+
+i.e. `\n`
+
+Execute the sequence of commands sent since the last `\n`
+
+### Example
+
+`t151632;n020n12d06m411\n`
+
+This will use 151634 as the Nexa transmitter ID, and then turn Nexa device 2 off, Nexa device 12 dim to level 6, and turn Maplin socket channel 3 button 1 on.
 
 ## Credit
 
