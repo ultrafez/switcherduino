@@ -16,11 +16,11 @@ When connected via USB, the Arduino will appear to the USB host as a serial devi
 
 ## Serial protocol
 
-A series of commands sent one after the other (concatendated) are sent to the Arduino, followed by a `\n` newline character - at this point, the commands will be executed sequentially. Command details:
+A series of commands sent one after the other (concatenated) are sent to the Arduino, followed by a `\n` newline character - at this point, the commands will be executed sequentially. Command details:
 
 ### Set Nexa self-learning transmitter number
 
-Example: `t67108863`
+Example: `t67108863;`
 
 Set the Nexa self-learning transmitter number. This can be used multiple times per command string, but only the last set number will be used when all of the commands are executed. This means that only devices that are paired with the same transmitter code can be used in one execution. Maximum transmitter code value is 67108863 (26 bits)
 
