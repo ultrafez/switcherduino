@@ -3,7 +3,7 @@
 #include "MaplinCtrl.h"
 
 const int MaplinCtrl::kPayloadSize = 48;
-const int MaplinCtrl::kPulseWidthSmall = 500;
+const int MaplinCtrl::kPulseWidthSmall = 400;
 
 // Button ID (payload1) values.  There are 4 values for 4 channels, organised as
 // ch1_btn1, ch1_btn2, ch1_btn3, ch1_btn4, ch2_btn1, etc.
@@ -64,14 +64,14 @@ void MaplinCtrl::sendData(long payload1, long payload2) {
   digitalWrite(tx_pin_, HIGH);
   digitalWrite(led_pin_, LOW); // on a Pro Micro, LED low = on
   
-  // Send a preamble of 13 ms low pulse
+  // Send a preamble of 12.4 ms low pulse
   digitalWrite(tx_pin_, LOW);
-  for (int ii = 0; ii < 26; ii++) {
+  for (int ii = 0; ii < 31; ii++) {
     delayMicroseconds(kPulseWidthSmall);
   }
   digitalWrite(led_pin_, HIGH);
   
-  // send sync pulse : high for 0.5 ms
+  // send sync pulse : high for 0.4 ms
   digitalWrite(tx_pin_, HIGH);
   delayMicroseconds(kPulseWidthSmall);
   digitalWrite(tx_pin_, LOW);
