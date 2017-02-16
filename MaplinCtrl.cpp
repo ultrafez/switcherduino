@@ -52,7 +52,7 @@ void MaplinCtrl::simulateButton(int device, int on) {
   long payload1 = buttons[device];
   long payload2 = on ? 13107L : 21299L;
 
-  // Send the data twice - once doesn't seem to be enough
+  // Send the data three times - once doesn't seem to be enough
   sendData(payload1, payload2);
   sendData(payload1, payload2);
   sendData(payload1, payload2);
