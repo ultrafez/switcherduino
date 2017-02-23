@@ -52,7 +52,7 @@ Execute the sequence of commands sent since the last `\n`
 
 `t151632;n020n12d06m411\n`
 
-This will use 151634 as the Nexa transmitter ID, and then turn Nexa device 2 off, Nexa device 12 dim to level 6, and turn Maplin socket channel 3 button 1 on.
+This will use 151632 as the Nexa transmitter ID, and then turn Nexa device 2 off, Nexa device 12 dim to level 6, and turn Maplin socket channel 4 button 1 on.
 
 ## Credit
 
